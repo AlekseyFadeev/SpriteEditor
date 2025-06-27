@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Web Sprite Editor</title>
+
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- JSZip and FileSaver for ZIP creation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.0/FileSaver.min.js"></script>
+
+    <!-- Custom Styles -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0f172a; /* bg-slate-900 */
+        }
+        .drop-zone-active {
+            border-color: #4f46e5; /* indigo-600 */
+            background-color: #1e1b4b; /* deep indigo */
+        }
+        input[type=number]::-webkit-inner-spin-button,
+        input[type=number]::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        input[type=number] {
+            -moz-appearance: textfield;
+        }
+        #interactive-canvas-container {
+            position: relative;
+            background-image: linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px);
+            background-size: 20px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 300px;
+        }
+        #background-canvas, #interactive-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            cursor: pointer;
+            will-change: transform;
+        }
+        #image-selector {
+            -ms-overflow-style: none;  /* IE and Edge */
+            scrollbar-width: none;  /* Firefox */
+        }
+        #image-selector::-webkit-scrollbar {
+            display: none; /* Chrome, Safari, Opera */
+        }
+        #zoom-canvas {
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+        }
+    </style>
+</head>
+<body class="text-slate-200">
+
+    <div class="container mx-auto p-4 md:p-8">
+
+        <header class="text-center mb-8">
+            <h1 class="text-4xl md:text-5xl font-bold text-white mb-2">Advanced Web Sprite Editor</h1>
+            <p class="text-lg text-slate-400">Precisely select, clean, and export sprites from any sheet.</p>
+        </header>
+
+        <main class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+
+            <!-- Left Panel: Upload & Selection -->
+            <div class="bg-slate-800 p-6 rounded-2xl shadow-lg border border-slate-700 flex flex-col space-y-6">
+                 <div>
+                    <h2 class="text-2xl font-semibold text-white mb-3 flex items-center"><span class="bg-indigo-600 text-white rounded-full h-8 w-8 text-sm font-bold flex items-center justify-center mr-3">1</span>Upload Images</h2>
+                    <div id="drop-zone" class="border-2 border-dashed border-slate-600 rounded-xl p-8 text-center cursor-pointer transition-all duration-300 hover:border-indigo-500 hover:bg-slate-700/50">
+                        <div id="upload-prompt">
+                             <svg class="mx-auto h-12 w-12 text-slate-400" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+                            <p class="mt-2 text-slate-300"><span class="font-semibold text-indigo-400">Click to upload</span> or drag & drop</p>
+                            <p class="text-xs text-slate-500 mt-1">PNG files with transparency</p>
+                        </div>
+                        <input type="file" id="file-input" class="hidden" accept="image/png" multiple>
+                    </div>
+                </div>
+
+                <div>
+                    <h2 class="text-2xl font-semibold text-white mb-2 flex items-center"><span class="bg-indigo-600 text-white rounded-full h-8 w-8 text-sm font-bold flex items-center justify-center mr-3">2</span>Select Source</h2>
+                    <div id="image-selector-container" class="bg-slate-900/50 p-2 rounded-lg min-h-[80px]">
+                        <div id="image-selector" class="flex space-x-2 overflow-x-auto">
+                            <p id="image-selector-placeholder" class="text-slate-500 text-sm p-4 text-center w-full">Upload images to see them here</p>
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    <h2 class="text-2xl font-semibold text-white mb-2 flex items-center"><span class="bg-indigo-600 text-white rounded-full h-8 w-8 text-sm font-bold flex items-center justify-center mr-3">3</span>Select Sprites</h2>
+                    <div id="interactive-canvas-container" class="w-full aspect-w-1 aspect-h-1 rounded-lg overflow-hidden">
+                        <canvas id="background-canvas"></canvas>
+                        <canvas id="interactive-canvas"></canvas>
+                        <p id="interactive-placeholder" class="text-slate-500">Upload and select an image to begin</p>
+                        <!-- Zoom Preview Window -->
+                        <div id="zoom-preview-container" class="hidden absolute top-2 right-2 bg-slate-900/80 backdrop-blur-sm border-2 border-slate-500 rounded-lg shadow-2xl p-2 pointer-events-none z-50">
+                             <canvas id="zoom-canvas" width="128" height="128"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Panel: Configure & Download -->
+            <div class="bg-slate-800 p-6 rounded-2xl shadow-lg border border-slate-700 flex flex-col space-y-6">
+                <div>
+                    <h2 class="text-2xl font-semibold text-white mb-4 flex items-center"><span class="bg-indigo-600 text-white rounded-full h-8 w-8 text-sm font-bold flex items-center justify-center mr-3">4</span>Configure Export</h2>
+                    <div class="space-y-4">
+                        <!-- Max Size Slider -->
+                        <div>
+                            <div class="flex justify-between items-center mb-1">
+                                <label for="max-size-slider" class="block text-sm font-medium text-slate-300">Max Sprite Size</label>
+                                <input type="number" id="max-size-input" value="128" min="1" class="w-20 bg-slate-700 border border-slate-600 rounded-md p-1 text-white text-center">
+                            </div>
+                            <input type="range" id="max-size-slider" value="128" min="16" max="512" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer">
+                        </div>
+                        <!-- Padding Slider -->
+                        <div>
+                           <div class="flex justify-between items-center mb-1">
+                                <label for="padding-slider" class="block text-sm font-medium text-slate-300">Padding</label>
+                                <input type="number" id="padding-input" value="10" min="0" class="w-20 bg-slate-700 border border-slate-600 rounded-md p-1 text-white text-center">
+                            </div>
+                            <input type="range" id="padding-slider" value="10" min="0" max="50" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer">
+                        </div>
+                        <!-- Columns Slider -->
+                        <div>
+                            <div class="flex justify-between items-center mb-1">
+                                <label for="columns-slider" class="block text-sm font-medium text-slate-300">Columns</label>
+                                <input type="number" id="columns-input" value="8" min="1" class="w-20 bg-slate-700 border border-slate-600 rounded-md p-1 text-white text-center">
+                            </div>
+                            <input type="range" id="columns-slider" value="8" min="1" max="20" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer">
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <h2 class="text-2xl font-semibold text-white mb-2 flex items-center"><span class="bg-indigo-600 text-white rounded-full h-8 w-8 text-sm font-bold flex items-center justify-center mr-3">5</span>Download</h2>
+                    <div class="w-full min-h-[150px] bg-slate-900/50 rounded-lg p-2 flex items-center justify-center bg-grid-pattern" style="background-image: linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px); background-size: 20px 20px;">
+                        <canvas id="output-canvas" class="max-w-full max-h-[250px] object-contain"></canvas>
+                        <p id="output-placeholder" class="text-slate-500 text-center px-4">Preview of the final spritesheet will appear here</p>
+                    </div>
+                    <p id="selection-count" class="text-center text-sm text-slate-400 mt-2">0 sprites selected</p>
+                    <div id="download-options" class="space-y-3 mt-4">
+                         <button id="download-sheet-btn" class="w-full bg-emerald-600 text-white font-bold py-3 px-4 rounded-lg shadow-md hover:bg-emerald-700 disabled:bg-slate-600 disabled:cursor-not-allowed" disabled>Download Sprite Sheet</button>
+                         <button id="download-individual-btn" class="w-full bg-sky-600 text-white font-bold py-3 px-4 rounded-lg shadow-md hover:bg-sky-700 disabled:bg-slate-600 disabled:cursor-not-allowed" disabled>Download as ZIP</button>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // --- DOM Element References ---
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+        const downloadSheetBtn = document.getElementById('download-sheet-btn');
+        const downloadIndividualBtn = document.getElementById('download-individual-btn');
+        const interactiveCanvasContainer = document.getElementById('interactive-canvas-container');
+        const backgroundCanvas = document.getElementById('background-canvas');
+        const bgCtx = backgroundCanvas.getContext('2d');
+        const interactiveCanvas = document.getElementById('interactive-canvas');
+        const interactiveCtx = interactiveCanvas.getContext('2d');
+        const interactivePlaceholder = document.getElementById('interactive-placeholder');
+        const imageSelector = document.getElementById('image-selector');
+        const imageSelectorPlaceholder = document.getElementById('image-selector-placeholder');
+        const outputCanvas = document.getElementById('output-canvas');
+        const outputCtx = outputCanvas.getContext('2d');
+        const outputPlaceholder = document.getElementById('output-placeholder');
+        const selectionCount = document.getElementById('selection-count');
+        const zoomPreviewContainer = document.getElementById('zoom-preview-container');
+        const zoomCanvas = document.getElementById('zoom-canvas');
+        const zoomCtx = zoomCanvas.getContext('2d');
+
+        // --- Config Inputs ---
+        const maxSizeInput = document.getElementById('max-size-input');
+        const maxSizeSlider = document.getElementById('max-size-slider');
+        const paddingInput = document.getElementById('padding-input');
+        const paddingSlider = document.getElementById('padding-slider');
+        const columnsInput = document.getElementById('columns-input');
+        const columnsSlider = document.getElementById('columns-slider');
+
+        // --- State Variables ---
+        let imageSources = [];
+        let activeImageId = null;
+        let selectionOrder = [];
+        let canvasRenderState = { scale: 1, offsetX: 0, offsetY: 0 };
+        let nextImageId = 0;
+
+        // --- Event Listeners ---
+        dropZone.addEventListener('click', () => fileInput.click());
+        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('drop-zone-active'); });
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drop-zone-active'));
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('drop-zone-active');
+            if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files);
+        });
+        fileInput.addEventListener('change', (e) => { if (e.target.files.length) handleFiles(e.target.files) });
+
+        const setupSliderSync = (slider, input) => {
+            slider.addEventListener('input', () => { input.value = slider.value; updateFinalSheet(); });
+            input.addEventListener('change', () => { slider.value = input.value; updateFinalSheet(); });
+        };
+        setupSliderSync(maxSizeSlider, maxSizeInput);
+        setupSliderSync(paddingSlider, paddingInput);
+        setupSliderSync(columnsSlider, columnsInput);
+
+        interactiveCanvas.addEventListener('mousemove', handleCanvasMousemove);
+        interactiveCanvas.addEventListener('click', handleCanvasClick);
+        interactiveCanvas.addEventListener('mouseleave', () => {
+            const activeImg = getActiveImage();
+            if (!activeImg) return;
+            let changed = false;
+            activeImg.detectedSprites.forEach(s => { if (s.hovered) { changed = true; s.hovered = false; }});
+            if (changed) {
+                drawInteractiveOverlay();
+                zoomPreviewContainer.classList.add('hidden');
+            }
+        });
+
+        downloadSheetBtn.addEventListener('click', () => {
+            if (!outputCanvas) return;
+            outputCanvas.toBlob(function(blob) {
+                saveAs(blob, "spritesheet.png");
+            });
+        });
+
+        downloadIndividualBtn.addEventListener('click', downloadSpritesAsZip);
+
+        // --- Main Application Flow ---
+
+        function handleFiles(files) {
+            const imageFiles = Array.from(files).filter(f => f.type.startsWith('image/png'));
+            if (imageFiles.length === 0) { alert('Please upload PNG files.'); return; }
+            let loadedCount = 0;
+            imageFiles.forEach(file => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        const newSource = { id: nextImageId++, name: file.name, image: img, detectedSprites: [] };
+                        imageSources.push(newSource);
+                        loadedCount++;
+                        if (loadedCount === imageFiles.length) {
+                           renderImageSelector();
+                           switchActiveImage(newSource.id);
+                        }
+                    };
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function renderImageSelector() {
+            if (imageSources.length > 0) imageSelectorPlaceholder.classList.add('hidden');
+            else imageSelectorPlaceholder.classList.remove('hidden');
+            imageSelector.innerHTML = '';
+            imageSources.forEach(source => {
+                const thumbContainer = document.createElement('div');
+                thumbContainer.className = `relative flex-shrink-0 w-20 h-20 rounded-md p-1 cursor-pointer transition-all ${source.id === activeImageId ? 'bg-indigo-600' : 'bg-slate-700 hover:bg-slate-600'}`;
+                thumbContainer.onclick = () => switchActiveImage(source.id);
+                const thumbImg = new Image();
+                thumbImg.src = source.image.src;
+                thumbImg.className = 'w-full h-full object-contain';
+                const removeBtn = document.createElement('button');
+                removeBtn.innerHTML = '&times;';
+                removeBtn.className = 'absolute -top-1 -right-1 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold leading-none hover:bg-red-500';
+                removeBtn.onclick = (e) => { e.stopPropagation(); removeImage(source.id); };
+                thumbContainer.appendChild(thumbImg);
+                thumbContainer.appendChild(removeBtn);
+                imageSelector.appendChild(thumbContainer);
+            });
+        }
+
+        function switchActiveImage(id) {
+            zoomPreviewContainer.classList.add('hidden');
+            activeImageId = id;
+            const activeImageSource = getActiveImage();
+            if (!activeImageSource) {
+                interactivePlaceholder.classList.remove('hidden');
+                bgCtx.clearRect(0, 0, backgroundCanvas.width, backgroundCanvas.height);
+                interactiveCtx.clearRect(0, 0, interactiveCanvas.width, interactiveCanvas.height);
+                return;
+            }
+            interactivePlaceholder.classList.add('hidden');
+            if (activeImageSource.detectedSprites.length === 0) processImage(true);
+            else resizeAndDrawAll();
+            renderImageSelector();
+        }
+
+        function removeImage(id) {
+            selectionOrder = selectionOrder.filter(sprite => sprite.sourceImageId !== id);
+            imageSources = imageSources.filter(source => source.id !== id);
+            if (activeImageId === id) {
+                activeImageId = null;
+                const newActiveId = imageSources.length > 0 ? imageSources[0].id : null;
+                if (newActiveId !== null) switchActiveImage(newActiveId);
+                else {
+                    interactivePlaceholder.classList.remove('hidden');
+                    bgCtx.clearRect(0, 0, backgroundCanvas.width, backgroundCanvas.height);
+                    interactiveCtx.clearRect(0, 0, interactiveCanvas.width, interactiveCanvas.height);
+                }
+            }
+            renderImageSelector();
+            updateFinalSheet();
+        }
+
+        async function processImage(isInitial = false) {
+            const activeImg = getActiveImage();
+            if (!activeImg) return;
+
+            const previouslySelectedSprites = isInitial ? [] : selectionOrder.filter(sprite => sprite.sourceImageId === activeImg.id);
+            await new Promise(resolve => setTimeout(resolve, 10));
+
+            const separation = 3;
+            const contours = findContours(activeImg.image, separation);
+
+            activeImg.detectedSprites = contours.map(c => {
+                const path = createPathFromContour(c.contour);
+                const maskCanvas = createMaskForContour(c, activeImg.image);
+                const wasSelected = previouslySelectedSprites.some(oldSprite => oldSprite.box.x === c.box.x && oldSprite.box.y === c.box.y && oldSprite.box.w === c.box.w && oldSprite.box.h === c.box.h);
+                return { ...c, path, maskCanvas, sourceImageId: activeImg.id, selected: wasSelected, hovered: false };
+            });
+            const newSelectionForThisImage = activeImg.detectedSprites.filter(s => s.selected);
+            const selectionsFromOtherImages = selectionOrder.filter(sprite => sprite.sourceImageId !== activeImg.id);
+            selectionOrder = [...selectionsFromOtherImages, ...newSelectionForThisImage];
+            resizeAndDrawAll();
+            updateFinalSheet();
+        }
+
+        function resizeAndDrawAll() {
+            const activeImg = getActiveImage();
+            if (!activeImg) return;
+            const containerRect = interactiveCanvasContainer.getBoundingClientRect();
+            backgroundCanvas.width = containerRect.width; backgroundCanvas.height = containerRect.height;
+            interactiveCanvas.width = containerRect.width; interactiveCanvas.height = containerRect.height;
+            const scale = Math.min(containerRect.width / activeImg.image.width, containerRect.height / activeImg.image.height);
+            const displayWidth = activeImg.image.width * scale;
+            const displayHeight = activeImg.image.height * scale;
+            const offsetX = (containerRect.width - displayWidth) / 2;
+            const offsetY = (containerRect.height - displayHeight) / 2;
+            canvasRenderState = { scale, offsetX, offsetY };
+            bgCtx.clearRect(0, 0, containerRect.width, containerRect.height);
+            bgCtx.drawImage(activeImg.image, offsetX, offsetY, displayWidth, displayHeight);
+            drawInteractiveOverlay();
+        }
+
+        const observer = new ResizeObserver(resizeAndDrawAll);
+        observer.observe(interactiveCanvasContainer);
+
+        function getSpriteAtPos(canvasX, canvasY) {
+            const activeImg = getActiveImage();
+            if (!activeImg) return null;
+            const { scale, offsetX, offsetY } = canvasRenderState;
+            const imageX = (canvasX - offsetX) / scale;
+            const imageY = (canvasY - offsetY) / scale;
+            for (const sprite of activeImg.detectedSprites.slice().reverse()) {
+                if (interactiveCtx.isPointInPath(sprite.path, imageX, imageY)) return sprite;
+            }
+            return null;
+        }
+
+        function handleCanvasMousemove(e) {
+            const activeImg = getActiveImage();
+            if (!activeImg) return;
+            const hoveredSprite = getSpriteAtPos(e.offsetX, e.offsetY);
+            let somethingChanged = false;
+            activeImg.detectedSprites.forEach(sprite => {
+                const isHovered = (sprite === hoveredSprite);
+                if (sprite.hovered !== isHovered) {
+                    sprite.hovered = isHovered; somethingChanged = true;
+                }
+            });
+            if (somethingChanged) drawInteractiveOverlay();
+
+            if (hoveredSprite) {
+                zoomPreviewContainer.classList.remove('hidden');
+                updateZoomPreview(hoveredSprite);
+            } else {
+                zoomPreviewContainer.classList.add('hidden');
+            }
+        }
+
+        function handleCanvasClick(e) {
+            zoomPreviewContainer.classList.add('hidden');
+            const clickedSprite = getSpriteAtPos(e.offsetX, e.offsetY);
+            if (clickedSprite) {
+                const indexInSelection = selectionOrder.findIndex(s => s === clickedSprite);
+                if (indexInSelection === -1) {
+                    clickedSprite.selected = true;
+                    selectionOrder.push(clickedSprite);
+                } else {
+                    clickedSprite.selected = false;
+                    selectionOrder.splice(indexInSelection, 1);
+                }
+                drawInteractiveOverlay();
+                updateFinalSheet();
+            }
+        }
+
+        function drawInteractiveOverlay() {
+            const activeImg = getActiveImage();
+            if (!activeImg) { interactiveCtx.clearRect(0,0,interactiveCanvas.width, interactiveCanvas.height); return; }
+            const { scale, offsetX, offsetY } = canvasRenderState;
+            interactiveCtx.clearRect(0, 0, interactiveCanvas.width, interactiveCanvas.height);
+            interactiveCtx.save();
+            interactiveCtx.translate(offsetX, offsetY);
+            interactiveCtx.scale(scale, scale);
+            activeImg.detectedSprites.forEach(({ path, selected, hovered }) => {
+                if (selected || hovered) {
+                    interactiveCtx.save();
+                    if (selected) {
+                        interactiveCtx.fillStyle = 'rgba(79, 70, 229, 0.5)';
+                        interactiveCtx.strokeStyle = '#a5b4fc';
+                        interactiveCtx.lineWidth = 2 / scale;
+                        interactiveCtx.shadowColor = '#a5b4fc';
+                        interactiveCtx.shadowBlur = 8;
+                    } else {
+                        interactiveCtx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+                        interactiveCtx.strokeStyle = '#ffffff';
+                        interactiveCtx.lineWidth = 1 / scale;
+                        interactiveCtx.shadowColor = '#ffffff';
+                        interactiveCtx.shadowBlur = 6;
+                    }
+                    interactiveCtx.fill(path);
+                    interactiveCtx.stroke(path);
+                    interactiveCtx.restore();
+                }
+            });
+            interactiveCtx.restore();
+        }
+
+        function updateFinalSheet() {
+            selectionCount.textContent = `(${selectionOrder.length} selected)`;
+            if (selectionOrder.length === 0) {
+                outputPlaceholder.classList.remove('hidden');
+                outputCanvas.style.display = 'none';
+                downloadSheetBtn.disabled = true; downloadIndividualBtn.disabled = true; return;
+            }
+            outputPlaceholder.classList.add('hidden');
+            outputCanvas.style.display = 'block';
+
+            const processedSprites = extractAndProcessSprites(selectionOrder);
+            const cols = parseInt(columnsInput.value, 10) || Math.min(selectionOrder.length, 8);
+            const rows = Math.ceil(selectionOrder.length / cols);
+            const maxSize = parseInt(maxSizeInput.value, 10);
+            const padding = parseInt(paddingInput.value, 10);
+            const cellSize = maxSize + padding;
+            outputCanvas.width = cols * cellSize + padding;
+            outputCanvas.height = rows * cellSize + padding;
+            outputCtx.clearRect(0,0,outputCanvas.width, outputCanvas.height);
+            processedSprites.forEach((spriteCanvas, i) => {
+                const col = i % cols, row = Math.floor(i / cols);
+                const pasteX = padding + col * cellSize + (maxSize - spriteCanvas.width) / 2;
+                const pasteY = padding + row * cellSize + (maxSize - spriteCanvas.height) / 2;
+                outputCtx.drawImage(spriteCanvas, pasteX, pasteY);
+            });
+            downloadSheetBtn.disabled = false; downloadIndividualBtn.disabled = false;
+        }
+
+        function updateZoomPreview(sprite) {
+            const spriteCanvas = extractSingleSprite(sprite);
+            const targetSize = 128;
+            zoomCanvas.width = targetSize;
+            zoomCanvas.height = targetSize;
+            zoomCtx.imageSmoothingEnabled = false;
+            zoomCtx.clearRect(0, 0, targetSize, targetSize);
+            const scale = Math.min(targetSize / spriteCanvas.width, targetSize / spriteCanvas.height);
+            const w = spriteCanvas.width * scale;
+            const h = spriteCanvas.height * scale;
+            const x = (targetSize - w) / 2;
+            const y = (targetSize - h) / 2;
+            zoomCtx.drawImage(spriteCanvas, x, y, w, h);
+        }
+
+        async function downloadSpritesAsZip() {
+            if (selectionOrder.length === 0) return;
+
+            downloadIndividualBtn.textContent = 'Zipping...';
+            downloadIndividualBtn.disabled = true;
+
+            const zip = new JSZip();
+            const archiveName = "sprites"; // Use a default name
+            const processedSprites = extractAndProcessSprites(selectionOrder);
+
+            for (let i = 0; i < processedSprites.length; i++) {
+                const spriteCanvas = processedSprites[i];
+                const blob = await new Promise(resolve => spriteCanvas.toBlob(resolve, 'image/png'));
+                const filename = `${archiveName}_${String(i + 1).padStart(3, '0')}.png`;
+                zip.file(filename, blob);
+            }
+
+            const content = await zip.generateAsync({type:"blob"});
+            saveAs(content, `${archiveName}.zip`);
+
+            downloadIndividualBtn.textContent = 'Download as ZIP';
+            downloadIndividualBtn.disabled = false;
+        }
+
+        function getActiveImage() { return imageSources.find(s => s.id === activeImageId); }
+
+        // --- Image Processing & Contour Finding ---
+        function findContours(img,kernelSize){const canvas=document.createElement('canvas'),ctx=canvas.getContext('2d',{willReadFrequently:true});canvas.width=img.width;canvas.height=img.height;ctx.drawImage(img,0,0);const imageData=ctx.getImageData(0,0,img.width,img.height);let alpha=new Uint8ClampedArray(img.width*img.height);for(let i=0;i<alpha.length;i++)alpha[i]=imageData.data[i*4+3]>128?255:0;if(kernelSize>0)alpha=dilate(erode(alpha,img.width,img.height,kernelSize),img.width,img.height,kernelSize);const contours=[],w=img.width,h=img.height,labeledData=new Int32Array(alpha.length);let nextLabel=1,offsets=[-1,1,-w,w,-w-1,-w+1,w-1,w+1];for(let i=0;i<alpha.length;i++){if(alpha[i]===255&&labeledData[i]===0){const stack=[i];labeledData[i]=nextLabel;while(stack.length>0){const p=stack.pop(),x=p%w;for(const offset of offsets){const np=p+offset;if(np>=0&&np<alpha.length&&alpha[np]===255&&labeledData[np]===0){if(Math.abs((np%w)-x)>1)continue;labeledData[np]=nextLabel;stack.push(np)}}}nextLabel++}}const foundLabels=new Set();for(let y=1;y<h-1;y++){for(let x=1;x<w-1;x++){const i=y*w+x,label=labeledData[i];if(label>0&&!foundLabels.has(label)){if(labeledData[i-1]===0||labeledData[i+1]===0||labeledData[i-w]===0||labeledData[i+w]===0){contours.push(traceBoundary(labeledData,w,h,x,y,label));foundLabels.add(label)}}}}return contours.filter(c=>c.contour.length>20).map(c=>{let minX=w,minY=h,maxX=0,maxY=0;c.contour.forEach(p=>{minX=Math.min(minX,p.x);minY=Math.min(minY,p.y);maxX=Math.max(maxX,p.x);maxY=Math.max(maxY,p.y)});return{contour:c.contour,box:{x:minX,y:minY,w:maxX-minX+1,h:maxY-minY+1}}})}
+        function traceBoundary(data,w,h,startX,startY,label){const contour=[];let x=startX,y=startY,dir=0;const offsets=[[1,0],[1,-1],[0,-1],[-1,-1],[-1,0],[-1,1],[0,1],[1,1]];do{contour.push({x,y});dir=(dir+5)%8;let foundNext=!1;for(let i=0;i<8;i++){const nx=x+offsets[dir][0],ny=y+offsets[dir][1];if(nx>=0&&nx<w&&ny>=0&&ny<h&&data[ny*w+nx]===label){x=nx;y=ny;foundNext=!0;break}dir=(dir+1)%8}if(!foundNext)break}while(x!==startX||y!==startY);return{contour}}
+        function createPathFromContour(contour){const path=new Path2D();if(contour.length===0)return path;path.moveTo(contour[0].x,contour[0].y);for(let i=1;i<contour.length;i++)path.lineTo(contour[i].x,contour[i].y);path.closePath();return path}
+        function createMaskForContour({contour,box}){const canvas=document.createElement('canvas');canvas.width=box.w;canvas.height=box.h;const ctx=canvas.getContext('2d');ctx.translate(-box.x,-box.y);ctx.fillStyle='#fff';ctx.fill(createPathFromContour(contour));return canvas}
+        function extractSingleSprite(sprite){const{box,maskCanvas,sourceImageId}=sprite,sourceImage=imageSources.find(s=>s.id===sourceImageId).image,cropCanvas=document.createElement('canvas');cropCanvas.width=box.w;cropCanvas.height=box.h;const cropCtx=cropCanvas.getContext('2d');return cropCtx.drawImage(sourceImage,box.x,box.y,box.w,box.h,0,0,box.w,box.h),cropCtx.globalCompositeOperation='destination-in',cropCtx.drawImage(maskCanvas,0,0),cropCanvas}
+        function extractAndProcessSprites(selectedSprites){const maxSize=parseInt(maxSizeInput.value,10);return selectedSprites.map(sprite=>{const{box,maskCanvas,sourceImageId}=sprite,sourceImage=imageSources.find(s=>s.id===sourceImageId).image,cropCanvas=document.createElement('canvas');cropCanvas.width=box.w;cropCanvas.height=box.h;const cropCtx=cropCanvas.getContext('2d');cropCtx.drawImage(sourceImage,box.x,box.y,box.w,box.h,0,0,box.w,box.h),cropCtx.globalCompositeOperation='destination-in',cropCtx.drawImage(maskCanvas,0,0);let newWidth,newHeight;box.w>box.h?(newWidth=maxSize,newHeight=Math.round(newWidth*(box.h/box.w))):(newHeight=maxSize,newWidth=Math.round(newHeight*(box.w/box.h)));const finalCanvas=document.createElement('canvas');return finalCanvas.width=newWidth,finalCanvas.height=newHeight,finalCanvas.getContext('2d').drawImage(cropCanvas,0,0,box.w,box.h,0,0,newWidth,newHeight),finalCanvas})}
+        function erode(a,w,h,k){const o=new Uint8ClampedArray(a.length),n=Math.floor(k/2);for(let y=0;y<h;y++)for(let x=0;x<w;x++){let v=255;for(let ky=-n;ky<=n;ky++)for(let kx=-n;kx<=n;kx++){const ny=y+ky,nx=x+kx;if(ny>=0&&ny<h&&nx>=0&&nx<w&&a[ny*w+nx]<v)v=a[ny*w+nx]}o[y*w+x]=v}return o}
+        function dilate(a,w,h,k){const o=new Uint8ClampedArray(a.length),n=Math.floor(k/2);for(let y=0;y<h;y++)for(let x=0;x<w;x++){let v=0;for(let ky=-n;ky<=n;ky++)for(let kx=-n;kx<=n;kx++){const ny=y+ky,nx=x+kx;if(ny>=0&&ny<h&&nx>=0&&nx<w&&a[ny*w+nx]>v)v=a[ny*w+nx]}o[y*w+x]=v}return o}
+
+    </script>
+</body>
+</html>
